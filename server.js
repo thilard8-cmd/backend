@@ -1,9 +1,9 @@
-
 const express = require('express');
 const cors = require('cors');
+const { verifyToken, requireRole } = require('./verifyToken');
 
 const app = express();
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
 app.use(express.json());
@@ -37,12 +37,14 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+app.use('/api', verifyToken);
+
 app.get('/api/rides', (req, res) => {
   res.json(rides);
 });
 
 
-app.post('/api/rides', (req, res) => {
+app.post('/api/rides', requireRole('admin'), (req, res) => {
   const { rides: rideName, price } = req.body;
 
   if (!validateRide(rideName, price)) {
@@ -64,7 +66,7 @@ app.post('/api/rides', (req, res) => {
   res.status(201).json(newRide);
 });
 
-app.put('/api/rides/:id', (req, res) => {
+app.put('/api/rides/:id', requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const index = rides.findIndex((ride) => ride.id === id);
 
@@ -93,7 +95,7 @@ app.put('/api/rides/:id', (req, res) => {
   res.json(rides[index]);
 });
 
-app.delete('/api/rides/:id', (req, res) => {
+app.delete('/api/rides/:id', requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const exists = rides.some((ride) => ride.id === id);
 
@@ -113,11 +115,15 @@ app.delete('/api/rides/:id', (req, res) => {
   });
 });
 
-app.get('/api/bookings', (req, res) => {
-  res.json(bookings);
+app.get('/api/bookings', requireRole('admin', 'rider'), (req, res) => {
+  if (req.user.role === 'admin') {
+    return res.json(bookings);
+  }
+
+  res.json(bookings.filter((item) => item.riderEmail === req.user.email));
 });
 
-app.get('/api/bookings/:id', (req, res) => {
+app.get('/api/bookings/:id', requireRole('admin', 'rider'), (req, res) => {
   const id = Number(req.params.id);
   const booking = bookings.find((item) => item.id === id);
 
@@ -127,10 +133,16 @@ app.get('/api/bookings/:id', (req, res) => {
     });
   }
 
+  if (req.user.role !== 'admin' && booking.riderEmail !== req.user.email) {
+    return res.status(403).json({
+      message: 'You do not have permission to view this booking.',
+    });
+  }
+
   res.json(booking);
 });
 
-app.post('/api/bookings', (req, res) => {
+app.post('/api/bookings', requireRole('rider', 'admin'), (req, res) => {
   const {
     pickup,
     dropoff,
@@ -140,7 +152,6 @@ app.post('/api/bookings', (req, res) => {
     duration,
     price,
     riderName,
-    riderEmail,
   } = req.body;
 
   if (
@@ -197,8 +208,7 @@ app.post('/api/bookings', (req, res) => {
       typeof riderName === 'string' && riderName.trim()
         ? riderName.trim()
         : 'Rider',
-    riderEmail:
-      typeof riderEmail === 'string' ? riderEmail.trim() : '',
+    riderEmail: req.user.email,
     status: 'Pending',
     createdAt: now.toISOString(),
   };
@@ -210,7 +220,7 @@ app.post('/api/bookings', (req, res) => {
   res.status(201).json(newBooking);
 });
 
-app.put('/api/bookings/:id', (req, res) => {
+app.put('/api/bookings/:id', requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const index = bookings.findIndex((item) => item.id === id);
 
@@ -245,7 +255,7 @@ app.put('/api/bookings/:id', (req, res) => {
   res.json(bookings[index]);
 });
 
-app.delete('/api/bookings/:id', (req, res) => {
+app.delete('/api/bookings/:id', requireRole('admin'), (req, res) => {
   const id = Number(req.params.id);
   const exists = bookings.some((item) => item.id === id);
 
