@@ -1,16 +1,16 @@
-const admin = require('firebase-admin');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const { getFirestore } = require('firebase-admin/firestore');
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
     throw new Error(
       'FIREBASE_SERVICE_ACCOUNT environment variable is not set.'
     );
   }
 
-  admin.initializeApp({
-    credential: admin.credential.cert(
-      JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    ),
+  initializeApp({
+    credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
   });
 }
 
@@ -27,7 +27,7 @@ async function verifyToken(req, res, next) {
   let decoded;
 
   try {
-    decoded = await admin.auth().verifyIdToken(token);
+    decoded = await getAuth().verifyIdToken(token);
   } catch (error) {
     console.error('Token verification failed:', error.code || error.message);
 
@@ -37,8 +37,7 @@ async function verifyToken(req, res, next) {
   }
 
   try {
-    const snap = await admin
-      .firestore()
+    const snap = await getFirestore()
       .collection('users')
       .doc(decoded.uid)
       .get();
